@@ -4,31 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebM to MP4 Converter</title>
+    <link rel="stylesheet" href="root.css">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #2b2b2b;
-            color: #333;
+            background: var(--gradient);
+            color: var(--text2);
+            height:100vh;
         }
         h1 {
             text-align: center;
-            color: #1a1a1a;
         }
         .container {
-            background-color: white;
+            margin-top: 3rem;
             border-radius: 10px;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         .drop-zone {
-            border: 2px dashed #007bff;
-            border-radius: 8px;
-            padding: 40px;
+            max-width: 1200PX;
+            border: 2px dashed var(--accent);
+            border-radius: 4px;
+            padding: 20px;
             text-align: center;
-            margin: 20px 0;
+            margin: 0px auto;
             transition: background-color 0.3s;
         }
         .drop-zone.highlight {
@@ -37,9 +36,15 @@
         #file-selector {
             display: none;
         }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
         button {
-            background-color: #007bff;
-            color: white;
+            background-color: var(--accent);
+            color: #000;
+            font-weight: bold;
             border: none;
             padding: 10px 15px;
             border-radius: 5px;
@@ -48,7 +53,7 @@
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: var(--accenth);
         }
         button:disabled {
             background-color: #cccccc;
@@ -61,12 +66,12 @@
         }
         .error {
             background-color: #ffebee;
-            color: #d32f2f;
+            color: var(--red);
             display: none;
         }
         .success {
             background-color: #e8f5e9;
-            color: #2e7d32;
+            color: var(--blue);
             display: none;
         }
         .progress-container {
@@ -84,17 +89,17 @@
             color: #666;
         }
         .video-preview {
-            max-width: 100%;
+            max-width: 90%;
             margin-top: 20px;
             display: none;
             border-radius: 5px;
+            margin: 0 auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>WebM to MP4 Converter</h1>
-        <p>Convert WebM video files to MP4 format directly in your browser. No uploads to servers, everything stays on your device.</p>
         <div class="drop-zone" id="drop-zone">
             <p>Drag & drop your WebM file here</p>
             <p>or</p>
@@ -103,7 +108,10 @@
             <div class="file-info" id="file-info"></div>
         </div>
         <video id="video-preview" class="video-preview" controls></video>
-        <button id="convert-button" disabled>Convert to MP4</button>
+        <div class="button-container">
+            <button id="convert-button" disabled>Convert to MP4</button>
+        </div>
+        
         <div class="progress-container" id="progress-container">
             <p>Converting... Please wait.</p>
             <progress id="progress-bar" value="0" max="100"></progress>
