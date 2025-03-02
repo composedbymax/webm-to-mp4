@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebM to MP4 Converter</title>
+    <meta name="A lightweight, client-side web application that converts WebM video files to MP4 format entirely within your browser. No server uploads required">
     <link rel="stylesheet" href="root.css">
     <style>
         body {
@@ -53,7 +54,7 @@
             background-color: var(--accenth);
         }
         button:disabled {
-            background-color: #cccccc;
+            background-color: var(--dark);
             cursor: not-allowed;
         }
         .status {
@@ -92,6 +93,21 @@
             border-radius: 5px;
             margin: 0 auto;
         }
+        .hidden-video {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .max {
+            max-width: 700px;
+            display: flex;
+            justify-content: center;
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
@@ -102,13 +118,16 @@
             <input type="file" id="file-selector" accept=".webm"/>
             <div class="file-info" id="file-info"></div>
         </div>
+        <div class="max">
         <div class="progress-container" id="progress-container">
             <p>Converting... Please wait.</p>
             <progress id="progress-bar" value="0" max="100"></progress>
         </div>
         <div class="status error" id="error-message"></div>
         <div class="status success" id="success-message"></div>
+        </div>
         <video id="video-preview" class="video-preview" controls></video>
+        <video id="processing-video" class="hidden-video" muted></video>
         <div class="button-container">
             <button id="convert-button" disabled>Convert to MP4</button>
         </div>
@@ -125,6 +144,7 @@
             const successMessage = document.getElementById('success-message');
             const fileInfo = document.getElementById('file-info');
             const videoPreview = document.getElementById('video-preview');
+            const processingVideo = document.getElementById('processing-video');
             let selectedFile = null;
             let videoBlob = null;
             selectButton.addEventListener('click', () => fileSelector.click());
@@ -140,7 +160,6 @@
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('highlight');
-                
                 if (e.dataTransfer.files.length) {
                     handleFiles(e.dataTransfer.files);
                 }
@@ -196,25 +215,30 @@
                     convertButton.disabled = true;
                     progressContainer.style.display = 'block';
                     progressBar.value = 0;
-                    const videoElement = videoPreview;
-                    if (!videoElement.src) {
-                        videoElement.src = videoBlob;
-                        await new Promise((resolve, reject) => {
-                            videoElement.onloadedmetadata = resolve;
-                            videoElement.onerror = reject;
-                        });
-                    }
-                    await videoElement.play();
-                    const width = videoElement.videoWidth;
-                    const height = videoElement.videoHeight;
-                    const duration = videoElement.duration;
+                    videoPreview.style.display = 'none';
+                    processingVideo.src = videoBlob;
+                    processingVideo.muted = true;
+                    await new Promise((resolve, reject) => {
+                        processingVideo.onloadedmetadata = resolve;
+                        processingVideo.onerror = reject;
+                    });
+                    const width = processingVideo.videoWidth;
+                    const height = processingVideo.videoHeight;
+                    const duration = processingVideo.duration;
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     const stream = canvas.captureStream(30);
-                    const mediaStream = videoElement.captureStream();
-                    const audioTracks = mediaStream.getAudioTracks();
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioResponse = await fetch(videoBlob);
+                    const arrayBuffer = await audioResponse.arrayBuffer();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+                    const audioSource = audioContext.createBufferSource();
+                    audioSource.buffer = audioBuffer;
+                    const audioDestination = audioContext.createMediaStreamDestination();
+                    audioSource.connect(audioDestination);
+                    const audioTracks = audioDestination.stream.getAudioTracks();
                     if (audioTracks.length > 0) {
                         stream.addTrack(audioTracks[0]);
                     }
@@ -247,24 +271,33 @@
                         progressBar.value = 100;
                         downloadLink.click();
                         URL.revokeObjectURL(url);
+                        if (audioSource) {
+                            audioSource.stop();
+                        }
+                        if (audioContext && audioContext.state !== 'closed') {
+                            audioContext.close();
+                        }
+                        videoPreview.style.display = 'block';
                         showSuccess('Conversion completed successfully!');
                         progressContainer.style.display = 'none';
                         convertButton.disabled = false;
                     };
                     mediaRecorder.start(100);
-                    videoElement.addEventListener("timeupdate", function updateProgress() {
-                        const progress = (videoElement.currentTime / duration) * 100;
+                    await processingVideo.play();
+                    audioSource.start(0);
+                    processingVideo.addEventListener("timeupdate", function updateProgress() {
+                        const progress = (processingVideo.currentTime / duration) * 100;
                         progressBar.value = progress;
                         if (progress >= 100) {
-                            videoElement.removeEventListener("timeupdate", updateProgress);
+                            processingVideo.removeEventListener("timeupdate", updateProgress);
                         }
                     });
                     const drawFrame = () => {
-                        if (videoElement.ended || videoElement.paused) {
+                        if (processingVideo.ended || processingVideo.paused) {
                             mediaRecorder.stop();
                             return;
                         }
-                        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(processingVideo, 0, 0, canvas.width, canvas.height);
                         requestAnimationFrame(drawFrame);
                     };
                     drawFrame();
@@ -273,6 +306,7 @@
                     console.error(error);
                     progressContainer.style.display = 'none';
                     convertButton.disabled = false;
+                    videoPreview.style.display = 'block';
                 }
             }
         });
