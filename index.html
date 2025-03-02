@@ -13,9 +13,6 @@
             color: var(--text2);
             height:100vh;
         }
-        h1 {
-            text-align: center;
-        }
         .container {
             margin-top: 3rem;
             border-radius: 10px;
@@ -28,7 +25,7 @@
             padding: 20px;
             text-align: center;
             margin: 0px auto;
-            transition: background-color 0.3s;
+            transition: background-color 1s;
         }
         .drop-zone.highlight {
             background-color: rgba(0, 123, 255, 0.1);
@@ -39,9 +36,9 @@
         .button-container {
             display: flex;
             justify-content: center;
-            margin-top: 20px;
         }
         button {
+            margin-top: 20px;
             background-color: var(--accent);
             color: #000;
             font-weight: bold;
@@ -65,13 +62,13 @@
             border-radius: 5px;
         }
         .error {
-            background-color: #ffebee;
+            background-color: var(--dark);
             color: var(--red);
             display: none;
         }
         .success {
-            background-color: #e8f5e9;
-            color: var(--blue);
+            background-color: var(--dark);
+            color: var(--accent);
             display: none;
         }
         .progress-container {
@@ -86,10 +83,10 @@
         .file-info {
             margin-top: 10px;
             font-size: 14px;
-            color: #666;
         }
         .video-preview {
             max-width: 90%;
+            max-height: 60vh;
             margin-top: 20px;
             display: none;
             border-radius: 5px;
@@ -99,25 +96,22 @@
 </head>
 <body>
     <div class="container">
-        <h1>WebM to MP4 Converter</h1>
         <div class="drop-zone" id="drop-zone">
-            <p>Drag & drop your WebM file here</p>
-            <p>or</p>
+            <p>Drag & drop WebM file or</p>
             <button id="select-button">Select WebM File</button>
             <input type="file" id="file-selector" accept=".webm"/>
             <div class="file-info" id="file-info"></div>
         </div>
-        <video id="video-preview" class="video-preview" controls></video>
-        <div class="button-container">
-            <button id="convert-button" disabled>Convert to MP4</button>
-        </div>
-        
         <div class="progress-container" id="progress-container">
             <p>Converting... Please wait.</p>
             <progress id="progress-bar" value="0" max="100"></progress>
         </div>
         <div class="status error" id="error-message"></div>
         <div class="status success" id="success-message"></div>
+        <video id="video-preview" class="video-preview" controls></video>
+        <div class="button-container">
+            <button id="convert-button" disabled>Convert to MP4</button>
+        </div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -201,14 +195,16 @@
                     clearMessages();
                     convertButton.disabled = true;
                     progressContainer.style.display = 'block';
-                    progressBar.value = 10;
-                    const videoElement = document.createElement('video');
-                    videoElement.src = videoBlob;
-                    await new Promise((resolve, reject) => {
-                        videoElement.onloadedmetadata = resolve;
-                        videoElement.onerror = reject;
-                    });
-                    progressBar.value = 20;
+                    progressBar.value = 0;
+                    const videoElement = videoPreview;
+                    if (!videoElement.src) {
+                        videoElement.src = videoBlob;
+                        await new Promise((resolve, reject) => {
+                            videoElement.onloadedmetadata = resolve;
+                            videoElement.onerror = reject;
+                        });
+                    }
+                    await videoElement.play();
                     const width = videoElement.videoWidth;
                     const height = videoElement.videoHeight;
                     const duration = videoElement.duration;
@@ -217,8 +213,6 @@
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     const stream = canvas.captureStream(30);
-                    videoElement.muted = false;
-                    await videoElement.play();
                     const mediaStream = videoElement.captureStream();
                     const audioTracks = mediaStream.getAudioTracks();
                     if (audioTracks.length > 0) {
@@ -236,7 +230,6 @@
                             break;
                         }
                     }
-                    progressBar.value = 30;
                     const mediaRecorder = new MediaRecorder(stream, options);
                     const chunks = [];
                     mediaRecorder.ondataavailable = (e) => {
@@ -254,31 +247,27 @@
                         progressBar.value = 100;
                         downloadLink.click();
                         URL.revokeObjectURL(url);
-                        if (videoBlob) {
-                            URL.revokeObjectURL(videoBlob);
-                        }
-                        videoElement.pause();
                         showSuccess('Conversion completed successfully!');
                         progressContainer.style.display = 'none';
                         convertButton.disabled = false;
                     };
                     mediaRecorder.start(100);
+                    videoElement.addEventListener("timeupdate", function updateProgress() {
+                        const progress = (videoElement.currentTime / duration) * 100;
+                        progressBar.value = progress;
+                        if (progress >= 100) {
+                            videoElement.removeEventListener("timeupdate", updateProgress);
+                        }
+                    });
                     const drawFrame = () => {
                         if (videoElement.ended || videoElement.paused) {
                             mediaRecorder.stop();
                             return;
                         }
                         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-                        const progress = (videoElement.currentTime / duration) * 60 + 30;
-                        progressBar.value = Math.min(90, progress);
                         requestAnimationFrame(drawFrame);
                     };
                     drawFrame();
-                    videoElement.onended = () => {
-                        setTimeout(() => {
-                            mediaRecorder.stop();
-                        }, 200);
-                    };
                 } catch (error) {
                     showError(`Error: ${error.message}`);
                     console.error(error);
