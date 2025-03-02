@@ -10,7 +10,7 @@
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f7;
+            background-color: #2b2b2b;
             color: #333;
         }
         h1 {
@@ -83,12 +83,18 @@
             font-size: 14px;
             color: #666;
         }
+        .video-preview {
+            max-width: 100%;
+            margin-top: 20px;
+            display: none;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>WebM to MP4 Converter</h1>
-        <p>Convert WebM audio files to MP4 format directly in your browser. No uploads to servers, everything stays on your device.</p>
+        <p>Convert WebM video files to MP4 format directly in your browser. No uploads to servers, everything stays on your device.</p>
         <div class="drop-zone" id="drop-zone">
             <p>Drag & drop your WebM file here</p>
             <p>or</p>
@@ -96,6 +102,7 @@
             <input type="file" id="file-selector" accept=".webm"/>
             <div class="file-info" id="file-info"></div>
         </div>
+        <video id="video-preview" class="video-preview" controls></video>
         <button id="convert-button" disabled>Convert to MP4</button>
         <div class="progress-container" id="progress-container">
             <p>Converting... Please wait.</p>
@@ -115,7 +122,9 @@
             const errorMessage = document.getElementById('error-message');
             const successMessage = document.getElementById('success-message');
             const fileInfo = document.getElementById('file-info');
+            const videoPreview = document.getElementById('video-preview');
             let selectedFile = null;
+            let videoBlob = null;
             selectButton.addEventListener('click', () => fileSelector.click());
             fileSelector.addEventListener('change', handleFileSelection);
             convertButton.addEventListener('click', convertFile);
@@ -146,11 +155,15 @@
                     selectedFile = null;
                     convertButton.disabled = true;
                     fileInfo.textContent = '';
+                    videoPreview.style.display = 'none';
                     return;
                 }
                 clearMessages();
                 fileInfo.textContent = `Selected: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`;
                 convertButton.disabled = false;
+                videoBlob = URL.createObjectURL(selectedFile);
+                videoPreview.src = videoBlob;
+                videoPreview.style.display = 'block';
             }
             function formatFileSize(bytes) {
                 if (bytes < 1024) return bytes + ' bytes';
@@ -180,104 +193,90 @@
                     clearMessages();
                     convertButton.disabled = true;
                     progressContainer.style.display = 'block';
-                    const arrayBuffer = await readFileAsArrayBuffer(selectedFile);
-                    if (!window.AudioContext && !window.webkitAudioContext) {
-                        throw new Error('AudioContext is not supported in this browser.');
+                    progressBar.value = 10;
+                    const videoElement = document.createElement('video');
+                    videoElement.src = videoBlob;
+                    await new Promise((resolve, reject) => {
+                        videoElement.onloadedmetadata = resolve;
+                        videoElement.onerror = reject;
+                    });
+                    progressBar.value = 20;
+                    const width = videoElement.videoWidth;
+                    const height = videoElement.videoHeight;
+                    const duration = videoElement.duration;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    const stream = canvas.captureStream(30);
+                    videoElement.muted = false;
+                    await videoElement.play();
+                    const mediaStream = videoElement.captureStream();
+                    const audioTracks = mediaStream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        stream.addTrack(audioTracks[0]);
                     }
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    const audioContext = new AudioContext();
+                    let options = {};
+                    const mimeTypes = [
+                        'video/mp4',
+                        'video/webm;codecs=h264',
+                        'video/x-matroska;codecs=avc1'
+                    ];
+                    for (const type of mimeTypes) {
+                        if (MediaRecorder.isTypeSupported(type)) {
+                            options = { mimeType: type };
+                            break;
+                        }
+                    }
                     progressBar.value = 30;
-                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                    progressBar.value = 60;
-                    const mp4Data = await convertToMP4(audioBuffer);
-                    progressBar.value = 90;
-                    const blob = new Blob([mp4Data], { type: 'video/mp4' });
-                    const url = URL.createObjectURL(blob);
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = url;
-                    downloadLink.download = selectedFile.name.replace('.webm', '.mp4');
-                    progressBar.value = 100;
-                    downloadLink.click();
-                    URL.revokeObjectURL(url);
-                    showSuccess('Conversion completed successfully!');
+                    const mediaRecorder = new MediaRecorder(stream, options);
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            chunks.push(e.data);
+                        }
+                    };
+                    mediaRecorder.onstop = () => {
+                        const outputType = options.mimeType || 'video/mp4';
+                        const blob = new Blob(chunks, { type: outputType });
+                        const url = URL.createObjectURL(blob);
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = url;
+                        downloadLink.download = selectedFile.name.replace('.webm', '.mp4');
+                        progressBar.value = 100;
+                        downloadLink.click();
+                        URL.revokeObjectURL(url);
+                        if (videoBlob) {
+                            URL.revokeObjectURL(videoBlob);
+                        }
+                        videoElement.pause();
+                        showSuccess('Conversion completed successfully!');
+                        progressContainer.style.display = 'none';
+                        convertButton.disabled = false;
+                    };
+                    mediaRecorder.start(100);
+                    const drawFrame = () => {
+                        if (videoElement.ended || videoElement.paused) {
+                            mediaRecorder.stop();
+                            return;
+                        }
+                        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                        const progress = (videoElement.currentTime / duration) * 60 + 30;
+                        progressBar.value = Math.min(90, progress);
+                        requestAnimationFrame(drawFrame);
+                    };
+                    drawFrame();
+                    videoElement.onended = () => {
+                        setTimeout(() => {
+                            mediaRecorder.stop();
+                        }, 200);
+                    };
                 } catch (error) {
                     showError(`Error: ${error.message}`);
                     console.error(error);
-                } finally {
                     progressContainer.style.display = 'none';
                     convertButton.disabled = false;
                 }
-            }
-            function readFileAsArrayBuffer(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                });
-            }
-            async function convertToMP4(audioBuffer) {
-                const numberOfChannels = audioBuffer.numberOfChannels;
-                const sampleRate = audioBuffer.sampleRate;
-                const duration = audioBuffer.duration;
-                const ctx = new OfflineAudioContext(numberOfChannels, sampleRate * duration, sampleRate);
-                const source = ctx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(ctx.destination);
-                source.start();
-                const renderedBuffer = await ctx.startRendering();
-                const stream = createAudioStreamFromBuffer(renderedBuffer);
-                const chunks = [];
-                return new Promise((resolve, reject) => {
-                    try {
-                        if (!window.MediaRecorder) {
-                            throw new Error('MediaRecorder is not supported in this browser.');
-                        }
-                        let options = { mimeType: 'video/mp4' };
-                        if (!MediaRecorder.isTypeSupported('video/mp4')) {
-                            if (MediaRecorder.isTypeSupported('audio/mp4')) {
-                                options = { mimeType: 'audio/mp4' };
-                            } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
-                                options = { mimeType: 'audio/mpeg' };
-                            } else if (MediaRecorder.isTypeSupported('audio/aac')) {
-                                options = { mimeType: 'audio/aac' };
-                            } else {
-                                options = {};
-                            }
-                        }
-                        const mediaRecorder = new MediaRecorder(stream, options);
-                        mediaRecorder.ondataavailable = (event) => {
-                            if (event.data.size > 0) {
-                                chunks.push(event.data);
-                            }
-                        };
-                        mediaRecorder.onstop = () => {
-                            const blob = new Blob(chunks, { type: 'video/mp4' });
-                            const fileReader = new FileReader();
-                            fileReader.onload = (event) => {
-                                resolve(event.target.result);
-                            };
-                            fileReader.onerror = reject;
-                            fileReader.readAsArrayBuffer(blob);
-                        };
-                        mediaRecorder.start();
-                        setTimeout(() => {
-                            mediaRecorder.stop();
-                        }, duration * 1000 + 100);
-                    } catch (error) {
-                        reject(new Error(`MediaRecorder error: ${error.message}. Your browser may not support MP4 conversion.`));
-                    }
-                });
-            }
-            function createAudioStreamFromBuffer(audioBuffer) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioContext();
-                const dest = ctx.createMediaStreamDestination();
-                const source = ctx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(dest);
-                source.start();
-                return dest.stream;
             }
         });
     </script>
