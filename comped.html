@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebM to MP4 Converter</title>
+    <meta name="A lightweight, client-side web application that converts WebM video files to MP4 format entirely within your browser. No server uploads required">
+    <link rel="stylesheet" href="root.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0 auto;
+            background: var(--gradient);
+            color: var(--text2);
+            height:100vh;
+        }
+        .container {
+            margin-top: 3rem;
+            padding: 20px;
+        }
+        .drop-zone {
+            max-width: 1200px;
+            border: 2px dashed var(--accent);
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            margin: 0px auto;
+            margin-bottom: 1rem;
+            transition: background-color 1s;
+        }
+        .drop-zone.highlight {
+            background-color: rgba(0, 123, 255, 0.1);
+        }
+        #file-selector {
+            display: none;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        button {
+            margin-top: 20px;
+            background-color: var(--accent);
+            color: #000;
+            font-weight: bold;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: var(--accenth);
+        }
+        button:disabled {
+            background-color: var(--dark);
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .error {
+            background-color: var(--dark);
+            color: var(--red);
+            display: none;
+        }
+        .success {
+            background-color: var(--dark);
+            color: var(--accent);
+            display: none;
+        }
+        .progress-container {
+            display: none;
+        }
+        progress {
+            width: 100%;
+            height: 20px;
+            border-radius: 4px;
+        }
+        .file-info {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .video-preview {
+            max-width: 90%;
+            max-height: 50vh;
+            margin-top: 20px;
+            display: none;
+            border-radius: 4px;
+            margin: 0 auto;
+        }
+        .hidden-video {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .max {
+            max-width: 700px;
+            display: flex;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: var(--dark);
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: var(--text1);
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--accent);
+            background-color: var(--bg);
+            color: var(--text1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="drop-zone" id="drop-zone">
+            <p>Drag & drop WebM file or</p>
+            <button id="select-button">Select WebM File</button>
+            <input type="file" id="file-selector" accept=".webm"/>
+            <div class="file-info" id="file-info"></div>
+        </div>
+        <div class="max">
+        <div class="progress-container" id="progress-container">
+            <p>Converting... Please wait.</p>
+            <progress id="progress-bar" value="0" max="100"></progress>
+        </div>
+        <div class="status error" id="error-message"></div>
+        <div class="status success" id="success-message"></div>
+        </div>
+        <video id="video-preview" class="video-preview" controls></video>
+        <video id="processing-video" class="hidden-video" muted></video>
+        <div class="button-container">
+            <button id="convert-button" disabled>Convert to MP4</button>
+        </div>
+    </div>
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Save Converted File</div>
+            <div class="input-group">
+                <label for="filename-input">Filename:</label>
+                <input type="text" id="filename-input" placeholder="Enter filename (without extension)">
+            </div>
+            <div class="button-container">
+                <button id="save-button">Save</button>
+                <button id="cancel-button">Cancel</button>
+            </div>
+        </div>
+    </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const dropZone = document.getElementById('drop-zone');
+    const fileSelector = document.getElementById('file-selector');
+    const selectButton = document.getElementById('select-button');
+    const convertButton = document.getElementById('convert-button');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const errorMessage = document.getElementById('error-message');
+    const successMessage = document.getElementById('success-message');
+    const fileInfo = document.getElementById('file-info');
+    const videoPreview = document.getElementById('video-preview');
+    const processingVideo = document.getElementById('processing-video');
+    const saveModal = document.getElementById('save-modal');
+    const filenameInput = document.getElementById('filename-input');
+    const saveButton = document.getElementById('save-button');
+    const cancelButton = document.getElementById('cancel-button');
+    let selectedFile = null;
+    let videoBlob = null;
+    let convertedBlob = null;
+    let convertedBlobURL = null;
+    selectButton.addEventListener('click', () => fileSelector.click());
+    fileSelector.addEventListener('change', handleFileSelection);
+    convertButton.addEventListener('click', convertFile);
+    saveButton.addEventListener('click', saveFile);
+    cancelButton.addEventListener('click', () => {
+        saveModal.style.display = 'none';
+    });
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('highlight');
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('highlight');
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('highlight');
+        if (e.dataTransfer.files.length) {
+            handleFiles(e.dataTransfer.files);
+        }
+    });
+    function handleFileSelection(e) {
+        if (e.target.files.length) {
+            handleFiles(e.target.files);
+        }
+    }
+    function handleFiles(files) {
+        selectedFile = files[0];
+        if (!selectedFile.type.includes('webm')) {
+            showError('Please select a WebM file.');
+            selectedFile = null;
+            convertButton.disabled = true;
+            fileInfo.textContent = '';
+            videoPreview.style.display = 'none';
+            return;
+        }
+        clearMessages();
+        fileInfo.textContent = `Selected: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`;
+        convertButton.disabled = false;
+        videoBlob = URL.createObjectURL(selectedFile);
+        videoPreview.src = videoBlob;
+        videoPreview.style.display = 'block';
+        const suggestedFilename = selectedFile.name.replace('.webm', '');
+        filenameInput.value = suggestedFilename;
+    }
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' bytes';
+        else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        else return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        successMessage.style.display = 'none';
+    }
+    function showSuccess(message) {
+        successMessage.textContent = message;
+        successMessage.style.display = 'block';
+        errorMessage.style.display = 'none';
+    }
+    function clearMessages() {
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+    }
+    function saveFile() {
+        if (!convertedBlob) {
+            showError('No converted file to save.');
+            saveModal.style.display = 'none';
+            return;
+        }
+        let filename = filenameInput.value.trim();
+        if (!filename) {
+            filename = 'converted';
+        }
+        if (!filename.toLowerCase().endsWith('.mp4')) {
+            filename += '.mp4';
+        }
+        const downloadLink = document.createElement('a');
+        downloadLink.href = convertedBlobURL;
+        downloadLink.download = filename;
+        downloadLink.click();
+        saveModal.style.display = 'none';
+        showSuccess(`File saved as "${filename}"`);
+    }
+    async function convertFile() {
+        if (!selectedFile) {
+            showError('Please select a file first.');
+            return;
+        }
+        try {
+            clearMessages();
+            convertButton.disabled = true;
+            progressContainer.style.display = 'block';
+            progressBar.value = 0;
+            videoPreview.style.display = 'none';
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += (100 - progress) * 0.03;
+                progressBar.value = Math.min(95, progress);
+            }, 200);
+            processingVideo.src = videoBlob;
+            processingVideo.muted = true;
+            await new Promise((resolve, reject) => {
+                processingVideo.onloadedmetadata = resolve;
+                processingVideo.onerror = reject;
+            });
+            const width = processingVideo.videoWidth;
+            const height = processingVideo.videoHeight;
+            const duration = processingVideo.duration;
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioResponse = await fetch(videoBlob);
+            const arrayBuffer = await audioResponse.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+            const audioSource = audioContext.createBufferSource();
+            audioSource.buffer = audioBuffer;
+            const audioDestination = audioContext.createMediaStreamDestination();
+            audioSource.connect(audioDestination);
+            const audioTracks = audioDestination.stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                stream.addTrack(audioTracks[0]);
+            }
+            let options = {};
+            const mimeTypes = [
+                'video/mp4',
+                'video/webm;codecs=h264',
+                'video/x-matroska;codecs=avc1'
+            ];
+            for (const type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    options = { mimeType: type };
+                    break;
+                }
+            }
+            const mediaRecorder = new MediaRecorder(stream, options);
+            const chunks = [];
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    chunks.push(e.data);
+                }
+            };
+            mediaRecorder.onstop = () => {
+                clearInterval(progressInterval);
+                progressBar.value = 100;
+                const outputType = options.mimeType || 'video/mp4';
+                convertedBlob = new Blob(chunks, { type: outputType });
+                convertedBlobURL = URL.createObjectURL(convertedBlob);
+                if (audioSource) {
+                    audioSource.stop();
+                }
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                }
+                videoPreview.style.display = 'block';
+                progressContainer.style.display = 'none';
+                convertButton.disabled = false;
+                saveModal.style.display = 'flex';
+            };
+            mediaRecorder.start(100);
+            await processingVideo.play();
+            audioSource.start(0);
+            const drawFrame = () => {
+                if (processingVideo.ended || processingVideo.paused) {
+                    mediaRecorder.stop();
+                    return;
+                }
+                ctx.drawImage(processingVideo, 0, 0, canvas.width, canvas.height);
+                requestAnimationFrame(drawFrame);
+            };
+            drawFrame();
+        } catch (error) {
+            showError(`Error: ${error.message}`);
+            console.error(error);
+            progressContainer.style.display = 'none';
+            convertButton.disabled = false;
+            videoPreview.style.display = 'block';
+        }
+    }
+});
+</script>
+</body>
+</html>
