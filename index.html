@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebM to MP4 Converter</title>
-    <meta name="A lightweight, client-side web application that converts WebM video files to MP4 format entirely within your browser. No server uploads required">
     <link rel="stylesheet" href="root.css">
     <link rel="stylesheet" href="style.css">
+    <meta name="A lightweight, client-side web application that converts WebM video files to MP4 format entirely within your browser. No server uploads required">
 </head>
 <body>
     <div class="container">
@@ -28,19 +28,6 @@
         <video id="processing-video" class="hidden-video" muted></video>
         <div class="button-container">
             <button id="convert-button" disabled>Convert to MP4</button>
-        </div>
-    </div>
-    <div id="save-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-title">Save Converted File</div>
-            <div class="input-group">
-                <label for="filename-input">Filename:</label>
-                <input type="text" id="filename-input" placeholder="Enter filename (without extension)">
-            </div>
-            <div class="button-container">
-                <button id="save-button">Save</button>
-                <button id="cancel-button">Cancel</button>
-            </div>
         </div>
     </div>
     <script src="script.js"></script>

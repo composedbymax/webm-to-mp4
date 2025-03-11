@@ -10,21 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInfo = document.getElementById('file-info');
     const videoPreview = document.getElementById('video-preview');
     const processingVideo = document.getElementById('processing-video');
-    const saveModal = document.getElementById('save-modal');
-    const filenameInput = document.getElementById('filename-input');
-    const saveButton = document.getElementById('save-button');
-    const cancelButton = document.getElementById('cancel-button');
     let selectedFile = null;
     let videoBlob = null;
-    let convertedBlob = null;
-    let convertedBlobURL = null;
     selectButton.addEventListener('click', () => fileSelector.click());
     fileSelector.addEventListener('change', handleFileSelection);
     convertButton.addEventListener('click', convertFile);
-    saveButton.addEventListener('click', saveFile);
-    cancelButton.addEventListener('click', () => {
-        saveModal.style.display = 'none';
-    });
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('highlight');
@@ -60,8 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
         videoBlob = URL.createObjectURL(selectedFile);
         videoPreview.src = videoBlob;
         videoPreview.style.display = 'block';
-        const suggestedFilename = selectedFile.name.replace('.webm', '');
-        filenameInput.value = suggestedFilename;
     }
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' bytes';
@@ -81,26 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearMessages() {
         errorMessage.style.display = 'none';
         successMessage.style.display = 'none';
-    }
-    function saveFile() {
-        if (!convertedBlob) {
-            showError('No converted file to save.');
-            saveModal.style.display = 'none';
-            return;
-        }
-        let filename = filenameInput.value.trim();
-        if (!filename) {
-            filename = 'converted';
-        }
-        if (!filename.toLowerCase().endsWith('.mp4')) {
-            filename += '.mp4';
-        }
-        const downloadLink = document.createElement('a');
-        downloadLink.href = convertedBlobURL;
-        downloadLink.download = filename;
-        downloadLink.click();
-        saveModal.style.display = 'none';
-        showSuccess(`File saved as "${filename}"`);
     }
     async function convertFile() {
         if (!selectedFile) {
@@ -167,8 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(progressInterval);
                 progressBar.value = 100;
                 const outputType = options.mimeType || 'video/mp4';
-                convertedBlob = new Blob(chunks, { type: outputType });
-                convertedBlobURL = URL.createObjectURL(convertedBlob);
+                const blob = new Blob(chunks, { type: outputType });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = selectedFile.name.replace('.webm', '.mp4');
+                downloadLink.click();
+                URL.revokeObjectURL(url);
                 if (audioSource) {
                     audioSource.stop();
                 }
@@ -176,9 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     audioContext.close();
                 }
                 videoPreview.style.display = 'block';
+                showSuccess('Conversion completed successfully!');
                 progressContainer.style.display = 'none';
                 convertButton.disabled = false;
-                saveModal.style.display = 'flex';
             };
             mediaRecorder.start(100);
             await processingVideo.play();
