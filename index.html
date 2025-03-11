@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebM to MP4 Converter</title>
+    <title>WebM to MP4 Batch Converter</title>
     <link rel="stylesheet" href="root.css">
     <link rel="stylesheet" href="style.css">
     <meta name="A lightweight, client-side web application that converts WebM video files to MP4 format entirely within your browser. No server uploads required">
@@ -11,25 +11,22 @@
 <body>
     <div class="container">
         <div class="drop-zone" id="drop-zone">
-            <p>Drag & drop WebM file or</p>
-            <button id="select-button">Select WebM File</button>
-            <input type="file" id="file-selector" accept=".webm"/>
+            <p>Drag & drop WebM files or</p>
+            <button id="select-button">Select WebM Files</button>
+            <input type="file" id="file-selector" accept=".webm" multiple/>
             <div class="file-info" id="file-info"></div>
         </div>
         <div class="max">
-        <div class="progress-container" id="progress-container">
-            <p>Converting... Please wait.</p>
-            <progress id="progress-bar" value="0" max="100"></progress>
+            <div class="status error" id="error-message"></div>
+            <div class="status success" id="success-message"></div>
+            <div class="batch-info" id="batch-info"></div>
         </div>
-        <div class="status error" id="error-message"></div>
-        <div class="status success" id="success-message"></div>
-        </div>
-        <video id="video-preview" class="video-preview" controls></video>
-        <video id="processing-video" class="hidden-video" muted></video>
         <div class="button-container">
-            <button id="convert-button" disabled>Convert to MP4</button>
+            <button id="convert-all-button" disabled>Convert All to MP4</button>
+            <button id="clear-all-button" disabled>Clear All</button>
         </div>
+        <div class="videos-grid" id="videos-grid"></div>
     </div>
-    <script src="script.js"></script>
+    <script src ="script.js"></script>
 </body>
 </html>
